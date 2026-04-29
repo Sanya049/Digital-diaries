@@ -5,7 +5,7 @@
 
 // 🔧 REPLACE THESE with your Supabase project values
 //    (you'll get these in Step 2 of the README)
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_URL = 'https://dczoagnvslevvtbnyltw.supabase.co/rest/v1/';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjem9hZ252c2xldnZ0Ym55bHR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0NjgxMTMsImV4cCI6MjA5MzA0NDExM30.6HFWkCYo8KcXXxa615JLohKnhzxVpo5NRANtbY_-k08';
 
 const { createClient } = supabase;
