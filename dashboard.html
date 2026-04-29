@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Diaries — Digital Diaries</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Caveat:wght@400;700&family=Dancing+Script:wght@400;700&family=Pacifico&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth.js" defer></script>
+</head>
+<body class="dash-body">
+
+  <!-- TOP BAR -->
+  <div class="dash-topbar">
+    <a href="dashboard.html" class="dash-logo">Digital Diaries</a>
+    <div class="dash-spacer"></div>
+    <span class="dash-user" id="user-name"></span>
+    <button class="dash-btn" onclick="signOut()">Sign Out</button>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="dash-content">
+    <h2 class="dash-heading">My Diaries ✨</h2>
+    <p class="dash-subheading">All your memories in one place</p>
+
+    <div class="books-grid" id="books-grid">
+      <!-- New book card -->
+      <div class="book-card-new" onclick="openNewBookModal()">
+        <div class="plus">+</div>
+        <div>New Diary</div>
+      </div>
+      <!-- Books loaded here -->
+    </div>
+  </div>
+
+  <!-- NEW BOOK MODAL -->
+  <div class="modal-overlay" id="new-book-modal">
+    <div class="modal-box">
+      <h3>✨ Create New Diary</h3>
+      <input class="modal-input" type="text" id="nb-title" placeholder="Title (e.g. Italy Trip)" maxlength="60">
+      <input class="modal-input" type="text" id="nb-subtitle" placeholder="Subtitle (e.g. Sanya's version)" maxlength="60">
+      <textarea class="modal-input modal-textarea" id="nb-desc" placeholder="A little description..."></textarea>
+      <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:8px;">COVER COLOUR</label>
+      <div class="cover-bg-grid" id="cover-bg-picker"></div>
+      <div class="modal-actions">
+        <button class="modal-btn" onclick="closeNewBookModal()">Cancel</button>
+        <button class="modal-btn primary" onclick="createBook()">Create 🌸</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DELETE CONFIRM MODAL -->
+  <div class="modal-overlay" id="delete-modal">
+    <div class="modal-box">
+      <h3>Delete this diary?</h3>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:20px;">This can't be undone. All pages and photos will be lost.</p>
+      <div class="modal-actions">
+        <button class="modal-btn" onclick="closeDeleteModal()">Keep it</button>
+        <button class="modal-btn danger" onclick="confirmDelete()">Yes, delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    const { createClient } = supabase;
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const COVER_BGS = [
+      'linear-gradient(135deg,#ff9a9e,#fad0c4)',
+      'linear-gradient(135deg,#a18cd1,#fbc2eb)',
+      'linear-gradient(135deg,#fccb90,#d57eeb)',
+      'linear-gradient(135deg,#84fab0,#8fd3f4)',
+      'linear-gradient(135deg,#f093fb,#f5576c)',
+      'linear-gradient(135deg,#fa709a,#fee140)',
+      'linear-gradient(135deg,#43e97b,#38f9d7)',
+      'linear-gradient(135deg,#30cfd0,#a8edea)',
+      'linear-gradient(135deg,#f9d423,#ff4e50)',
+      'linear-gradient(135deg,#6a11cb,#2575fc)',
+      'linear-gradient(135deg,#e0c3fc,#8ec5fc)',
+      'linear-gradient(135deg,#d85a30,#ff9966)',
+    ];
+
+    let selectedCoverBg = COVER_BGS[0];
+    let deleteTargetId = null;
+    let currentUser = null;
+
+    // Build cover bg picker
+    const picker = document.getElementById('cover-bg-picker');
+    COVER_BGS.forEach((bg, i) => {
+      const d = document.createElement('div');
+      d.className = 'cover-bg-opt' + (i === 0 ? ' selected' : '');
+      d.style.background = bg;
+      d.onclick = () => {
+        selectedCoverBg = bg;
+        picker.querySelectorAll('.cover-bg-opt').forEach(x => x.classList.remove('selected'));
+        d.classList.add('selected');
+      };
+      picker.appendChild(d);
+    });
+
+    async function init() {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return window.location.href = 'index.html';
+      currentUser = session.user;
+      const name = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
+      document.getElementById('user-name').textContent = '👋 ' + name;
+      loadBooks();
+    }
+
+    async function loadBooks() {
+      const { data, error } = await sb
+        .from('diaries')
+        .select('id, title, subtitle, cover_bg, page_count, updated_at')
+        .eq('user_id', currentUser.id)
+        .order('updated_at', { ascending: false });
+
+      if (error) { console.error(error); return; }
+
+      const grid = document.getElementById('books-grid');
+      // Remove existing book cards (keep the new card)
+      grid.querySelectorAll('.book-card').forEach(c => c.remove());
+
+      if (!data.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.innerHTML = '<div class="emoji">📖</div><p>No diaries yet — create your first one!</p>';
+        grid.appendChild(empty);
+        return;
+      }
+
+      const newBtn = grid.querySelector('.book-card-new');
+      data.forEach(book => {
+        const card = document.createElement('div');
+        card.className = 'book-card';
+        const date = new Date(book.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        card.innerHTML = `
+          <div class="book-cover" style="background:${book.cover_bg || COVER_BGS[0]}">
+            <span style="font-size:40px">📖</span>
+            <div class="book-cover-title">${escHtml(book.title)}</div>
+          </div>
+          <div class="book-meta">
+            <div class="book-title-text">${escHtml(book.title)}</div>
+            ${book.subtitle ? `<div class="book-date">${escHtml(book.subtitle)}</div>` : ''}
+            <div class="book-pages-count">${book.page_count || 0} page${book.page_count !== 1 ? 's' : ''} · ${date}</div>
+          </div>
+        `;
+        card.onclick = () => window.location.href = `app.html?id=${book.id}`;
+
+        // Right-click or long-press to delete
+        card.oncontextmenu = (e) => { e.preventDefault(); openDeleteModal(book.id); };
+
+        grid.insertBefore(card, newBtn);
+      });
+    }
+
+    function openNewBookModal() {
+      document.getElementById('nb-title').value = '';
+      document.getElementById('nb-subtitle').value = '';
+      document.getElementById('nb-desc').value = '';
+      selectedCoverBg = COVER_BGS[0];
+      picker.querySelectorAll('.cover-bg-opt').forEach((x,i) => x.classList.toggle('selected', i===0));
+      document.getElementById('new-book-modal').classList.add('open');
+      setTimeout(() => document.getElementById('nb-title').focus(), 100);
+    }
+
+    function closeNewBookModal() {
+      document.getElementById('new-book-modal').classList.remove('open');
+    }
+
+    async function createBook() {
+      const title = document.getElementById('nb-title').value.trim();
+      if (!title) { alert('Please give your diary a title!'); return; }
+
+      const subtitle = document.getElementById('nb-subtitle').value.trim();
+      const description = document.getElementById('nb-desc').value.trim();
+
+      const newBook = {
+        user_id: currentUser.id,
+        title,
+        subtitle,
+        description,
+        cover_bg: selectedCoverBg,
+        page_count: 0,
+        pages: []
+      };
+
+      const { data, error } = await sb.from('diaries').insert(newBook).select().single();
+      if (error) { alert('Error creating diary: ' + error.message); return; }
+      closeNewBookModal();
+      window.location.href = `app.html?id=${data.id}`;
+    }
+
+    function openDeleteModal(id) {
+      deleteTargetId = id;
+      document.getElementById('delete-modal').classList.add('open');
+    }
+
+    function closeDeleteModal() {
+      deleteTargetId = null;
+      document.getElementById('delete-modal').classList.remove('open');
+    }
+
+    async function confirmDelete() {
+      if (!deleteTargetId) return;
+      await sb.from('diaries').delete().eq('id', deleteTargetId).eq('user_id', currentUser.id);
+      closeDeleteModal();
+      loadBooks();
+    }
+
+    async function signOut() {
+      await sb.auth.signOut();
+      window.location.href = 'index.html';
+    }
+
+    function escHtml(str) {
+      return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    init();
+  </script>
+</body>
+</html>

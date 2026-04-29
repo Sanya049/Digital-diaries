@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Digital Diaries — Editor</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Caveat:wght@400;700&family=Dancing+Script:wght@400;700&family=Pacifico&family=Abril+Fatface&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="app-body">
+
+  <!-- TOP BAR -->
+  <div class="app-topbar">
+    <a href="dashboard.html" class="app-logo-link">📖 Digital Diaries</a>
+    <span class="app-book-title" id="app-book-title">Loading...</span>
+    <button class="app-nav-btn active" id="btn-view" onclick="setMode('view')">📖 View</button>
+    <button class="app-nav-btn" id="btn-text" onclick="setMode('text')">✏️ Text</button>
+    <button class="app-nav-btn" id="btn-sticker" onclick="setMode('sticker')">🎨 Stickers</button>
+    <button class="app-nav-btn" onclick="triggerImg()">🖼️ Photo</button>
+    <button class="app-nav-btn" onclick="openCoverModal()">✨ Cover</button>
+    <div style="flex:1"></div>
+    <span class="save-status" id="save-status"></span>
+    <button class="app-save-btn" id="btn-save" onclick="saveBook()">Save ☁️</button>
+  </div>
+
+  <!-- TEXT TOOLBAR -->
+  <div class="sub-toolbar hidden" id="text-toolbar">
+    <label>Font</label>
+    <select id="sel-font" onchange="applyText()">
+      <option value="'Caveat',cursive">Caveat (handwritten)</option>
+      <option value="'Dancing Script',cursive">Dancing Script</option>
+      <option value="'Pacifico',cursive">Pacifico</option>
+      <option value="'Abril Fatface',cursive">Abril Fatface</option>
+      <option value="'Playfair Display',serif">Playfair</option>
+      <option value="'Quicksand',sans-serif">Quicksand</option>
+    </select>
+    <label>Size</label>
+    <select id="sel-size" onchange="applyText()">
+      <option value="13px">Tiny</option>
+      <option value="16px">Small</option>
+      <option value="20px">Medium</option>
+      <option value="26px" selected>Large</option>
+      <option value="36px">XL</option>
+      <option value="52px">XXL</option>
+    </select>
+    <label>Colour</label>
+    <input type="color" id="sel-color" value="#d85a30" onchange="applyText()">
+    <label>Bold</label><input type="checkbox" id="sel-bold" onchange="applyText()">
+    <label>Italic</label><input type="checkbox" id="sel-italic" onchange="applyText()">
+    <button class="tool-action primary" onclick="addTextBox()">+ Add Text</button>
+    <button class="tool-action danger" onclick="deleteSelected()">🗑</button>
+  </div>
+
+  <!-- IMAGE TOOLBAR -->
+  <div class="sub-toolbar hidden" id="img-toolbar">
+    <label>Brightness</label><input type="range" id="ib" min="50" max="200" value="100" oninput="applyFilter()">
+    <label>Contrast</label><input type="range" id="ic" min="50" max="200" value="100" oninput="applyFilter()">
+    <label>Saturation</label><input type="range" id="is" min="0" max="200" value="100" oninput="applyFilter()">
+    <label>Blur</label><input type="range" id="ibl" min="0" max="10" value="0" oninput="applyFilter()">
+    <label>Sepia</label><input type="range" id="ise" min="0" max="100" value="0" oninput="applyFilter()">
+    <button class="tool-action danger" onclick="deleteSelected()">🗑</button>
+    <button class="tool-action" onclick="doneImg()">✓ Done</button>
+  </div>
+
+  <!-- MAIN -->
+  <div class="app-main">
+
+    <!-- LEFT PANEL (stickers mode) -->
+    <div class="left-panel hidden" id="left-panel">
+      <div class="panel-section">
+        <h4>Stickers</h4>
+        <div class="sticker-grid" id="sticker-grid"></div>
+      </div>
+      <div class="panel-section">
+        <h4>Page Background</h4>
+        <div class="bg-grid-panel" id="bg-grid-panel"></div>
+      </div>
+    </div>
+
+    <!-- CANVAS -->
+    <div class="canvas-wrap" id="canvas-wrap">
+      <div class="page-tabs" id="page-tabs">
+        <div class="page-tab active" data-idx="0" onclick="switchPage(0)">✨ Cover</div>
+        <button class="add-page-tab" onclick="addPage()">+</button>
+      </div>
+
+      <div class="scrapbook-page" id="scrapbook-page">
+        <div class="page-bg-layer" id="page-bg-layer"></div>
+        <div class="elements-layer" id="elements-layer"></div>
+        <div class="cover-overlay" id="cover-overlay">
+          <div class="cover-title-disp" id="c-title">My Diary</div>
+          <div class="cover-subtitle-disp" id="c-sub"></div>
+          <div class="cover-desc-disp" id="c-desc">Click ✨ Cover to personalise</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- COVER MODAL -->
+  <div class="modal-overlay" id="cover-modal">
+    <div class="modal-box">
+      <h3>✨ Cover Page</h3>
+      <input class="modal-input" type="text" id="cm-title" placeholder="Title" maxlength="60">
+      <input class="modal-input" type="text" id="cm-sub" placeholder="Subtitle (e.g. Sanya's version)" maxlength="60">
+      <textarea class="modal-input modal-textarea" id="cm-desc" placeholder="Description..."></textarea>
+      <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:8px;">COVER COLOUR</label>
+      <div class="cover-bg-grid" id="cm-bg-grid"></div>
+      <div class="modal-actions">
+        <button class="modal-btn" onclick="closeCoverModal()">Cancel</button>
+        <button class="modal-btn primary" onclick="saveCover()">Save ✨</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="file-input" accept="image/*" onchange="handleImg(event)">
+
+  <script>
+    // ===== SUPABASE SETUP =====
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    const { createClient } = supabase;
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ===== CONSTANTS =====
+    const STICKERS = ['🌸','🌺','🎀','⭐','🌈','🦋','🌙','☀️','🍓','🌻','🎈','💫','🍦','🌴','🦩','🎨','🌷','💌','🎵','🎪','🦄','🍉','🌊','🍋','🎉','🥂','✈️','🗺️','📸','🕯️','🍂','🌿','💎','🦊','🐝','🍄','🐚','🪷','🫧','🩷','🧸'];
+    const COVER_BGS = ['linear-gradient(135deg,#ff9a9e,#fad0c4)','linear-gradient(135deg,#a18cd1,#fbc2eb)','linear-gradient(135deg,#fccb90,#d57eeb)','linear-gradient(135deg,#84fab0,#8fd3f4)','linear-gradient(135deg,#f093fb,#f5576c)','linear-gradient(135deg,#fa709a,#fee140)','linear-gradient(135deg,#43e97b,#38f9d7)','linear-gradient(135deg,#30cfd0,#a8edea)','linear-gradient(135deg,#f9d423,#ff4e50)','linear-gradient(135deg,#6a11cb,#2575fc)','linear-gradient(135deg,#e0c3fc,#8ec5fc)','linear-gradient(135deg,#d85a30,#ff9966)'];
+    const PAGE_BGS = ['#fff8f0','#fff0f5','#f0fff5','#f0f5ff','#fffff0','#fce4d6','#d6e4fc','#e8fcd6','repeating-linear-gradient(0deg,#fff8f0,#fff8f0 27px,#f0c8a8 28px)','repeating-linear-gradient(0deg,#f0f8ff,#f0f8ff 27px,#b8d4f0 28px)','repeating-linear-gradient(45deg,#fff8f0,#fff8f0 8px,#ffe0c0 8px,#ffe0c0 9px)','#fdf6e3'];
+
+    // ===== STATE =====
+    let diaryId = null;
+    let currentUser = null;
+    let pages = [{ type:'cover', elements:[], bg:'#fff8f0' }];
+    let currentPage = 0;
+    let mode = 'view';
+    let selectedEl = null;
+    let coverConfig = { title:'My Diary', subtitle:'', desc:'Click ✨ Cover to personalise', bg: COVER_BGS[0] };
+    let selectedCoverBg = COVER_BGS[0];
+    let saveTimer = null;
+    let isDirty = false;
+
+    // ===== INIT =====
+    async function init() {
+      const { data:{ session } } = await sb.auth.getSession();
+      if (!session) return window.location.href = 'index.html';
+      currentUser = session.user;
+
+      const params = new URLSearchParams(window.location.search);
+      diaryId = params.get('id');
+      if (!diaryId) return window.location.href = 'dashboard.html';
+
+      await loadDiary();
+      buildStickers();
+      buildBgSwatches();
+      buildCoverBgPicker();
+    }
+
+    async function loadDiary() {
+      const { data, error } = await sb.from('diaries').select('*').eq('id', diaryId).single();
+      if (error || !data) { window.location.href = 'dashboard.html'; return; }
+
+      document.getElementById('app-book-title').textContent = data.title;
+      coverConfig = {
+        title: data.title,
+        subtitle: data.subtitle || '',
+        desc: data.description || '',
+        bg: data.cover_bg || COVER_BGS[0]
+      };
+
+      if (data.pages && data.pages.length) {
+        pages = [{ type:'cover', elements: data.pages[0]?.elements || [], bg: data.pages[0]?.bg || '#fff8f0' }];
+        for (let i = 1; i < data.pages.length; i++) {
+          pages.push(data.pages[i]);
+          addPageTab(i);
+        }
+      }
+
+      renderPage();
+      setSaveStatus('Loaded ✓');
+    }
+
+    // ===== SAVE =====
+    async function saveBook() {
+      const btn = document.getElementById('btn-save');
+      btn.disabled = true;
+      setSaveStatus('Saving...');
+
+      // Serialize elements (remove DOM refs)
+      const serializedPages = pages.map(p => ({
+        type: p.type,
+        bg: p.bg,
+        elements: (p.elements || []).map(el => {
+          const { dom, ...rest } = el;
+          return rest;
+        })
+      }));
+
+      const { error } = await sb.from('diaries').update({
+        title: coverConfig.title,
+        subtitle: coverConfig.subtitle,
+        description: coverConfig.desc,
+        cover_bg: coverConfig.bg,
+        pages: serializedPages,
+        page_count: pages.length - 1,
+        updated_at: new Date().toISOString()
+      }).eq('id', diaryId);
+
+      btn.disabled = false;
+      isDirty = false;
+      if (error) setSaveStatus('Error saving ✗');
+      else setSaveStatus('Saved ✓ ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
+    }
+
+    function setSaveStatus(msg) {
+      document.getElementById('save-status').textContent = msg;
+    }
+
+    function markDirty() {
+      isDirty = true;
+      setSaveStatus('Unsaved changes');
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveBook, 8000); // auto-save after 8s idle
+    }
+
+    // ===== RENDER =====
+    function renderPage() {
+      const page = pages[currentPage];
+      const layer = document.getElementById('elements-layer');
+      const bgLayer = document.getElementById('page-bg-layer');
+      const coverOverlay = document.getElementById('cover-overlay');
+
+      if (currentPage === 0) {
+        bgLayer.style.background = coverConfig.bg;
+        coverOverlay.style.display = 'flex';
+        document.getElementById('c-title').textContent = coverConfig.title;
+        document.getElementById('c-sub').textContent = coverConfig.subtitle;
+        document.getElementById('c-desc').textContent = coverConfig.desc;
+      } else {
+        bgLayer.style.background = page.bg || '#fff8f0';
+        coverOverlay.style.display = 'none';
+      }
+
+      layer.innerHTML = '';
+      (page.elements || []).forEach(el => renderEl(el, layer));
+    }
+
+    function renderEl(el, layer) {
+      let dom;
+      if (el.type === 'sticker') {
+        dom = document.createElement('div');
+        dom.className = 'placed-sticker';
+        dom.textContent = el.emoji;
+        dom.style.cssText = `left:${el.x}px;top:${el.y}px;font-size:${el.size||36}px;transform:rotate(${el.rot||0}deg)`;
+      } else if (el.type === 'text') {
+        dom = document.createElement('div');
+        dom.className = 'placed-text';
+        dom.contentEditable = 'false';
+        dom.textContent = el.content;
+        dom.style.cssText = `left:${el.x}px;top:${el.y}px;font-family:${el.font};font-size:${el.size};color:${el.color};font-weight:${el.bold?'700':'400'};font-style:${el.italic?'italic':'normal'};width:${el.w||200}px`;
+        dom.ondblclick = e => { e.stopPropagation(); startEditText(dom, el); };
+      } else if (el.type === 'image') {
+        dom = document.createElement('div');
+        dom.className = 'placed-image';
+        dom.style.cssText = `left:${el.x}px;top:${el.y}px;width:${el.w||200}px;height:${el.h||160}px`;
+        const img = document.createElement('img');
+        img.src = el.src;
+        img.style.filter = buildFilter(el);
+        img.draggable = false;
+        dom.appendChild(img);
+        const rh = document.createElement('div');
+        rh.className = 'resize-handle';
+        rh.onmousedown = e => startResize(e, dom, el);
+        dom.appendChild(rh);
+        dom.ondblclick = e => { e.stopPropagation(); selectEl(dom, el); openImgEdit(el); };
+      }
+
+      if (!dom) return;
+      el.dom = dom;
+      dom._el = el;
+      dom.onclick = e => { e.stopPropagation(); if (mode !== 'view') selectEl(dom, el); };
+      makeDraggable(dom, el);
+      layer.appendChild(dom);
+      return dom;
+    }
+
+    // ===== DRAG =====
+    function makeDraggable(dom, el) {
+      dom.onmousedown = function(e) {
+        if (e.target.classList.contains('resize-handle')) return;
+        if (dom.contentEditable === 'true') return;
+        if (mode === 'view') return;
+        e.stopPropagation();
+        selectEl(dom, el);
+        let ox = el.x, oy = el.y, sx = e.clientX, sy = e.clientY, moved = false;
+        function mv(e) {
+          moved = true;
+          el.x = Math.max(0, ox + e.clientX - sx);
+          el.y = Math.max(0, oy + e.clientY - sy);
+          dom.style.left = el.x + 'px';
+          dom.style.top = el.y + 'px';
+        }
+        function up() {
+          document.removeEventListener('mousemove', mv);
+          document.removeEventListener('mouseup', up);
+          if (moved) markDirty();
+        }
+        document.addEventListener('mousemove', mv);
+        document.addEventListener('mouseup', up);
+      };
+    }
+
+    function startResize(e, dom, el) {
+      e.stopPropagation();
+      const sx = e.clientX, sy = e.clientY, ow = el.w, oh = el.h;
+      function mv(e) {
+        el.w = Math.max(60, ow + e.clientX - sx);
+        el.h = Math.max(40, oh + e.clientY - sy);
+        dom.style.width = el.w + 'px';
+        dom.style.height = el.h + 'px';
+      }
+      function up() {
+        document.removeEventListener('mousemove', mv);
+        document.removeEventListener('mouseup', up);
+        markDirty();
+      }
+      document.addEventListener('mousemove', mv);
+      document.addEventListener('mouseup', up);
+    }
+
+    // ===== SELECT =====
+    function selectEl(dom, el) {
+      deselectAll();
+      selectedEl = { dom, el };
+      dom.classList.add('selected-ring');
+      if (el.type === 'image') openImgEdit(el);
+    }
+
+    function deselectAll() {
+      if (selectedEl) {
+        selectedEl.dom.classList.remove('selected-ring');
+        if (selectedEl.dom.contentEditable === 'true') {
+          selectedEl.dom.contentEditable = 'false';
+          selectedEl.el.content = selectedEl.dom.textContent;
+          markDirty();
+        }
+      }
+      selectedEl = null;
+      document.getElementById('img-toolbar').classList.add('hidden');
+    }
+
+    function startEditText(dom, el) {
+      dom.contentEditable = 'true';
+      dom.classList.add('selected-ring');
+      dom.focus();
+      const range = document.createRange();
+      range.selectNodeContents(dom);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    // ===== TEXT =====
+    function addTextBox() {
+      const page = pages[currentPage];
+      const el = {
+        type: 'text',
+        x: 60, y: 80 + Math.random() * 120,
+        content: 'Write something...',
+        font: document.getElementById('sel-font').value,
+        size: document.getElementById('sel-size').value,
+        color: document.getElementById('sel-color').value,
+        bold: document.getElementById('sel-bold').checked,
+        italic: document.getElementById('sel-italic').checked,
+        w: 220
+      };
+      page.elements.push(el);
+      const dom = renderEl(el, document.getElementById('elements-layer'));
+      selectEl(dom, el);
+      setTimeout(() => startEditText(dom, el), 40);
+      markDirty();
+    }
+
+    function applyText() {
+      if (!selectedEl || selectedEl.el.type !== 'text') return;
+      const el = selectedEl.el;
+      const dom = selectedEl.dom;
+      el.font = document.getElementById('sel-font').value;
+      el.size = document.getElementById('sel-size').value;
+      el.color = document.getElementById('sel-color').value;
+      el.bold = document.getElementById('sel-bold').checked;
+      el.italic = document.getElementById('sel-italic').checked;
+      dom.style.fontFamily = el.font;
+      dom.style.fontSize = el.size;
+      dom.style.color = el.color;
+      dom.style.fontWeight = el.bold ? '700' : '400';
+      dom.style.fontStyle = el.italic ? 'italic' : 'normal';
+      markDirty();
+    }
+
+    // ===== FILTER =====
+    function buildFilter(el) {
+      return `brightness(${el.bright||100}%) contrast(${el.contrast||100}%) saturate(${el.sat||100}%) blur(${el.blur||0}px) sepia(${el.sepia||0}%)`;
+    }
+
+    function openImgEdit(el) {
+      document.getElementById('img-toolbar').classList.remove('hidden');
+      document.getElementById('ib').value = el.bright || 100;
+      document.getElementById('ic').value = el.contrast || 100;
+      document.getElementById('is').value = el.sat || 100;
+      document.getElementById('ibl').value = el.blur || 0;
+      document.getElementById('ise').value = el.sepia || 0;
+    }
+
+    function applyFilter() {
+      if (!selectedEl || selectedEl.el.type !== 'image') return;
+      const el = selectedEl.el;
+      el.bright = +document.getElementById('ib').value;
+      el.contrast = +document.getElementById('ic').value;
+      el.sat = +document.getElementById('is').value;
+      el.blur = +document.getElementById('ibl').value;
+      el.sepia = +document.getElementById('ise').value;
+      selectedEl.dom.querySelector('img').style.filter = buildFilter(el);
+      markDirty();
+    }
+
+    function doneImg() {
+      deselectAll();
+      document.getElementById('img-toolbar').classList.add('hidden');
+    }
+
+    // ===== IMAGE UPLOAD =====
+    function triggerImg() { document.getElementById('file-input').click(); }
+
+    function handleImg(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const el = { type:'image', src:ev.target.result, x:60+Math.random()*80, y:60+Math.random()*80, w:220, h:175, bright:100, contrast:100, sat:100, blur:0, sepia:0 };
+        pages[currentPage].elements.push(el);
+        const dom = renderEl(el, document.getElementById('elements-layer'));
+        selectEl(dom, el);
+        openImgEdit(el);
+        markDirty();
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    }
+
+    // ===== STICKERS =====
+    function buildStickers() {
+      const grid = document.getElementById('sticker-grid');
+      STICKERS.forEach(s => {
+        const btn = document.createElement('div');
+        btn.className = 'sticker-btn';
+        btn.textContent = s;
+        btn.onclick = () => addSticker(s);
+        grid.appendChild(btn);
+      });
+    }
+
+    function addSticker(emoji) {
+      const el = { type:'sticker', emoji, x:40+Math.random()*480, y:40+Math.random()*380, size:40, rot:Math.random()*30-15 };
+      pages[currentPage].elements.push(el);
+      renderEl(el, document.getElementById('elements-layer'));
+      markDirty();
+    }
+
+    // ===== BG SWATCHES =====
+    function buildBgSwatches() {
+      const grid = document.getElementById('bg-grid-panel');
+      PAGE_BGS.forEach(bg => {
+        const s = document.createElement('div');
+        s.className = 'bg-swatch-btn';
+        s.style.background = bg;
+        s.onclick = () => { pages[currentPage].bg = bg; document.getElementById('page-bg-layer').style.background = bg; markDirty(); grid.querySelectorAll('.bg-swatch-btn').forEach(x=>x.classList.remove('active')); s.classList.add('active'); };
+        grid.appendChild(s);
+      });
+    }
+
+    // ===== COVER MODAL =====
+    function buildCoverBgPicker() {
+      const grid = document.getElementById('cm-bg-grid');
+      COVER_BGS.forEach((bg, i) => {
+        const d = document.createElement('div');
+        d.className = 'cover-bg-opt' + (i===0?' selected':'');
+        d.style.background = bg;
+        d.onclick = () => { selectedCoverBg = bg; grid.querySelectorAll('.cover-bg-opt').forEach(x=>x.classList.remove('selected')); d.classList.add('selected'); };
+        grid.appendChild(d);
+      });
+    }
+
+    function openCoverModal() {
+      document.getElementById('cm-title').value = coverConfig.title;
+      document.getElementById('cm-sub').value = coverConfig.subtitle;
+      document.getElementById('cm-desc').value = coverConfig.desc;
+      selectedCoverBg = coverConfig.bg;
+      document.getElementById('cover-modal').classList.add('open');
+    }
+
+    function closeCoverModal() {
+      document.getElementById('cover-modal').classList.remove('open');
+    }
+
+    function saveCover() {
+      coverConfig.title = document.getElementById('cm-title').value.trim() || 'My Diary';
+      coverConfig.subtitle = document.getElementById('cm-sub').value.trim();
+      coverConfig.desc = document.getElementById('cm-desc').value.trim();
+      coverConfig.bg = selectedCoverBg;
+      closeCoverModal();
+      document.getElementById('app-book-title').textContent = coverConfig.title;
+      if (currentPage === 0) renderPage();
+      markDirty();
+    }
+
+    // ===== PAGES =====
+    function addPage() {
+      pages.push({ type:'page', elements:[], bg:'#fff8f0' });
+      const idx = pages.length - 1;
+      addPageTab(idx);
+      switchPage(idx);
+      markDirty();
+    }
+
+    function addPageTab(idx) {
+      const tc = document.getElementById('page-tabs');
+      const addBtn = tc.querySelector('.add-page-tab');
+      const tab = document.createElement('div');
+      tab.className = 'page-tab';
+      tab.dataset.idx = idx;
+      tab.innerHTML = `Page ${idx} <span class="del-x" onclick="deletePage(event,${idx})">✕</span>`;
+      tab.onclick = e => { if (!e.target.classList.contains('del-x')) switchPage(idx); };
+      tc.insertBefore(tab, addBtn);
+    }
+
+    function deletePage(e, idx) {
+      e.stopPropagation();
+      if (pages.length <= 1) return;
+      pages.splice(idx, 1);
+      rebuildTabs();
+      switchPage(Math.max(0, idx-1));
+      markDirty();
+    }
+
+    function rebuildTabs() {
+      const tc = document.getElementById('page-tabs');
+      tc.innerHTML = '<div class="page-tab active" data-idx="0" onclick="switchPage(0)">✨ Cover</div><button class="add-page-tab" onclick="addPage()">+</button>';
+      for (let i=1; i<pages.length; i++) addPageTab(i);
+    }
+
+    function switchPage(idx) {
+      deselectAll();
+      currentPage = idx;
+      document.querySelectorAll('.page-tab').forEach(t => t.classList.toggle('active', parseInt(t.dataset.idx)===idx));
+      renderPage();
+    }
+
+    // ===== DELETE SELECTED =====
+    function deleteSelected() {
+      if (!selectedEl) return;
+      const page = pages[currentPage];
+      const i = page.elements.indexOf(selectedEl.el);
+      if (i>-1) page.elements.splice(i,1);
+      selectedEl.dom.remove();
+      selectedEl = null;
+      markDirty();
+    }
+
+    // ===== MODE =====
+    function setMode(m) {
+      mode = m;
+      deselectAll();
+      ['view','text','sticker'].forEach(x => document.getElementById('btn-'+x).classList.toggle('active', m===x));
+      document.getElementById('text-toolbar').classList.toggle('hidden', m!=='text');
+      document.getElementById('left-panel').classList.toggle('hidden', m!=='sticker');
+      document.getElementById('img-toolbar').classList.add('hidden');
+    }
+
+    // ===== CLICK AWAY =====
+    document.getElementById('scrapbook-page').addEventListener('click', e => {
+      if (['scrapbook-page','elements-layer','page-bg-layer','cover-overlay'].includes(e.target.id) || e.target === e.currentTarget) deselectAll();
+    });
+
+    // ===== KEYBOARD =====
+    document.addEventListener('keydown', e => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedEl && document.activeElement.contentEditable !== 'true') {
+        if (!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) {
+          deleteSelected();
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveBook(); }
+    });
+
+    // ===== START =====
+    init();
+  </script>
+</body>
+</html>
